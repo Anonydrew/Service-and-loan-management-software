@@ -27,9 +27,9 @@ if [ ! -f .env ]; then
   echo "backend/.env is missing. Copy .env.production.example to .env and fill it in first."
   exit 1
 fi
-if grep -qE '<[^>]+>' .env; then
+if grep -vE '^[[:space:]]*#' .env | grep -qE '<[^>]+>'; then
   echo "backend/.env still contains <placeholders>:"
-  grep -nE '<[^>]+>' .env
+  grep -nE '<[^>]+>' .env | grep -vE '^[0-9]+:[[:space:]]*#'
   exit 1
 fi
 
