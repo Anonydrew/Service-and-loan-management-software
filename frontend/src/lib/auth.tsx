@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, ApiError, SESSION_EXPIRED_EVENT } from './api';
+import { api, ApiError, resetCsrf, SESSION_EXPIRED_EVENT } from './api';
 import type { Me } from './types';
 
 interface AuthState {
@@ -37,6 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const onExpired = (event: Event) => {
       const reason = (event as CustomEvent<string | undefined>).detail;
       setSessionNotice(reason === 'account_disabled' ? 'Your account has been disabled.' : 'Your session has ended. Please sign in again.');
+      resetCsrf();
       queryClient.setQueryData(['me'], null);
       queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== 'me' });
     };
@@ -54,6 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (email: string, password: string) => {
       const res = await api.post<{ user: Me }>('/api/auth/login', { email, password });
       setSessionNotice(null);
+      resetCsrf();
       resetOtherQueries();
       queryClient.setQueryData(['me'], res.user);
     },
@@ -64,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await api.post('/api/auth/logout');
     } finally {
+      resetCsrf();
       queryClient.setQueryData(['me'], null);
       resetOtherQueries();
     }

@@ -7,7 +7,7 @@ A multi-branch, multi-company management platform for a business that provides *
 | Backend | Laravel 13 · PHP 8.3 · Sanctum (SPA cookie auth) · dompdf — `backend/` |
 | Frontend | React 19 · TypeScript · Tailwind CSS v4 · TanStack Query · React Router — `frontend/` |
 | Database | SQLite for development and tests, MySQL 8 in production |
-| Tests | PHPUnit: 68 tests / 448 assertions (`cd backend && php artisan test`) |
+| Tests | PHPUnit: 78 tests (SQLite and MariaDB 10.11) (`cd backend && php artisan test`) |
 
 ## Quick start (development)
 
@@ -46,7 +46,8 @@ To try face verification without a provider, set `BIOMETRICS_FACE_DRIVER=simulat
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): modules, data model, tenancy and branch isolation, accounting postings, security controls, API overview
 - [docs/BIOMETRICS.md](docs/BIOMETRICS.md): onboarding-only biometric verification, provider and fingerprint-hardware integration requirements
 - [docs/SETUP.md](docs/SETUP.md): environment variables, local setup, tests
-- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): production deployment, migrations, scheduler, hardening checklist
+- [docs/DEPLOY-HOSTINGER.md](docs/DEPLOY-HOSTINGER.md): step-by-step Hostinger deployment
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): deployment summary for any host, hardening checklist
 
 ## Modules
 

@@ -193,7 +193,7 @@ class BiometricVerificationTest extends TestCase
         // 1. Forged signature.
         $start = $this->postJson("/api/customers/{$customer->id}/biometrics", ['modality' => 'fingerprint'])->assertCreated();
         $start->assertJsonPath('client.mode', 'bridge');
-        $result = ['attempt_id' => $start->json('attempt.id'), 'nonce' => $start->json('client.nonce'), 'outcome' => 'match',
+        $result = ['attempt_id' => $start->json('attempt.id'), 'nonce' => $start->json('client.nonce'), 'outcome' => 'match', 'method' => 'match_on_card', 'card_pin' => $customer->id_number,
             'match_score' => 0.95, 'provider_reference' => 'FP-1', 'issued_at' => now()->toIso8601String()];
         $this->postJson("/api/customers/{$customer->id}/biometrics/{$result['attempt_id']}/complete", ['result' => $result, 'signature' => $sign($result + ['x' => 1])])
             ->assertOk()->assertJsonPath('attempt.status', 'failed')->assertJsonPath('attempt.failure_reason', 'invalid_signature');
@@ -207,7 +207,7 @@ class BiometricVerificationTest extends TestCase
 
         // 3. Genuine result.
         $start3 = $this->postJson("/api/customers/{$customer->id}/biometrics", ['modality' => 'fingerprint'])->assertCreated();
-        $good = ['attempt_id' => $start3->json('attempt.id'), 'nonce' => $start3->json('client.nonce'), 'outcome' => 'match',
+        $good = ['attempt_id' => $start3->json('attempt.id'), 'nonce' => $start3->json('client.nonce'), 'outcome' => 'match', 'method' => 'match_on_card', 'card_pin' => $customer->id_number,
             'match_score' => 0.93, 'provider_reference' => 'FP-3', 'issued_at' => now()->toIso8601String(), 'device_model' => 'Test Scanner'];
         $this->postJson("/api/customers/{$customer->id}/biometrics/{$good['attempt_id']}/complete", ['result' => $good, 'signature' => $sign($good)])
             ->assertOk()->assertJsonPath('attempt.status', 'verified')->assertJsonPath('attempt.is_simulated', false);
@@ -224,13 +224,13 @@ class BiometricVerificationTest extends TestCase
         [$customer] = $this->onboardingCustomer();
 
         $s = $this->postJson("/api/customers/{$customer->id}/biometrics", ['modality' => 'fingerprint']);
-        $stale = ['attempt_id' => $s->json('attempt.id'), 'nonce' => $s->json('client.nonce'), 'outcome' => 'match', 'match_score' => 0.99,
+        $stale = ['attempt_id' => $s->json('attempt.id'), 'nonce' => $s->json('client.nonce'), 'outcome' => 'match', 'method' => 'match_on_card', 'card_pin' => $customer->id_number, 'match_score' => 0.99,
             'issued_at' => now()->subHour()->toIso8601String()];
         $this->postJson("/api/customers/{$customer->id}/biometrics/{$stale['attempt_id']}/complete", ['result' => $stale, 'signature' => FingerprintBridgeProvider::sign($stale, 's')])
             ->assertJsonPath('attempt.failure_reason', 'expired');
 
         $s = $this->postJson("/api/customers/{$customer->id}/biometrics", ['modality' => 'fingerprint']);
-        $low = ['attempt_id' => $s->json('attempt.id'), 'nonce' => $s->json('client.nonce'), 'outcome' => 'match', 'match_score' => 0.55,
+        $low = ['attempt_id' => $s->json('attempt.id'), 'nonce' => $s->json('client.nonce'), 'outcome' => 'match', 'method' => 'match_on_card', 'card_pin' => $customer->id_number, 'match_score' => 0.55,
             'issued_at' => now()->toIso8601String()];
         $this->postJson("/api/customers/{$customer->id}/biometrics/{$low['attempt_id']}/complete", ['result' => $low, 'signature' => FingerprintBridgeProvider::sign($low, 's')])
             ->assertJsonPath('attempt.status', 'manual_review');

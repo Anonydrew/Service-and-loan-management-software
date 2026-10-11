@@ -38,7 +38,7 @@ export default function OnboardingPage() {
     details: done((k) => k === 'details'),
     consent: done((k) => k === 'consent' || k.startsWith('biometric_consent')),
     documents: done((k) => k.includes('document') || k.startsWith('representative')),
-    verification: done((k) => k.startsWith('face_') || k.startsWith('fingerprint_')),
+    verification: done((k) => k.startsWith('face_') || k.startsWith('fingerprint_') || k.startsWith('ghana_card_biometric')),
     review: customer.onboarding_status === 'completed' ? 'complete' : 'incomplete',
   } as const;
 
@@ -140,6 +140,13 @@ function ReviewStep({ data, onDone }: { data: CustomerDetail; onDone: () => void
   const { can } = useAuth();
   const { customer, onboarding } = data;
   const [reason, setReason] = useState('');
+  const unverifiedGhanaCard = onboarding.items.filter((i) => i.key.startsWith('ghana_card_biometric') && i.status !== 'complete');
+  const ghanaCardNotice = unverifiedGhanaCard.length > 0 && (
+    <Alert tone="amber" title="Ghana Card biometric check outstanding">
+      {unverifiedGhanaCard.map((i) => i.label.replace('Ghana Card biometric verification - ', '')).join(', ')} must be verified by match-on-card or against the NIA register (L.I. 2523). Manual review
+      cannot approve a Ghana Card holder by looking at the card.
+    </Alert>
+  );
 
   const complete = useAction({
     fn: () => api.post(`/api/customers/${customer.id}/onboarding/complete`),
@@ -173,13 +180,15 @@ function ReviewStep({ data, onDone }: { data: CustomerDetail; onDone: () => void
         <Alert tone="amber" icon={<UserCheck className="size-4" />} title="Awaiting manual identity review">
           Reason given: {customer.manual_review_reason}
         </Alert>
-        {can('onboarding.review') && <ReviewDecision customer={customer} />}
+        {ghanaCardNotice}
+        {can('onboarding.review') && <ReviewDecision customer={customer} approveBlocked={unverifiedGhanaCard.length > 0} />}
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
+      {ghanaCardNotice}
       <Card>
         <CardHeader title="Complete onboarding" description="All required checklist items must be complete." />
         {onboarding.ready ? (

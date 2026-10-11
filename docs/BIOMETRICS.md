@@ -8,6 +8,39 @@ Biometric verification is used **only to confirm a customer's identity during on
 
 **WebAuthn and passkeys are not biometric identity matching.** A platform authenticator proves possession of a device, not that a person matches an identity record, so this system does not use them for onboarding.
 
+## Ghana Card holders: L.I. 2523
+
+The National Identity Register (Amendment) Regulations, 2026 (L.I. 2523) came into force on 9 June 2026. The transition window ends on **2 November 2026**. The rules:
+- Any organisation that onboards customers with the Ghana Card must confirm identity by **biometric authentication**: either **match-on-card** against the card's chip, or a match against the **National Identity Register** using an NIA-approved device or the NIA Identity Verification System Platform (IVSP).
+- Organisations **may not request, reproduce or retain a photocopy, scan or image** of the Ghana Card, and may not rely on visual inspection.
+
+This is not legal advice. Confirm your obligations with your legal adviser and the NIA (onboarding: idverification@nia.gov.gh).
+
+The system enforces these rules regardless of company settings:
+- **No card images.** `ghana_card` is not an uploadable document type, and the API refuses it (`ghana_card_image_prohibited`). Existing images can be removed with `php artisan documents:purge-ghana-card-images --dry-run`, then without `--dry-run`.
+- **Biometric check required.** Every customer, and every business signatory, whose ID type is Ghana Card gets a required checklist item: "Ghana Card biometric verification". Only a verified biometric attempt satisfies it. A face check against the NIA register or a fingerprint match-on-card both count.
+- **No approval by inspection.** Manual review cannot approve a Ghana Card holder until that check passes (`ghana_card_biometric_required`). A reviewer can still reject.
+- **Card must belong to the customer.** In match-on-card mode the bridge must return the card number read from the chip. The server compares it with the customer's recorded Ghana Card number and rejects someone else's card (`card_mismatch`).
+- **Method kept.** The method used (`match_on_card` or `nia_register`) is stored in `verification_method`. It is kept after retention purges as evidence of how identity was confirmed.
+
+## Your scanner: DERMALOG ZF1+
+
+According to DERMALOG's datasheet, the ZF1+ combines an optical fingerprint scanner with a chip-card reader:
+- 500 dpi, 480 × 320 px.
+- FBI PIV and BSI-TR-03121 certified image quality.
+- Liveness detection is an optional purchase.
+- The card reader is ISO 7816, PC/SC, CCID, T=0/T=1.
+- Match-on-card is supported for MCU-based cards.
+- Connects over USB 2.0. The SDK runs on Windows, Linux and Android, with NFIQ 1/2 quality scoring and WSQ compression.
+
+That makes it a suitable device for match-on-card onboarding with `FINGERPRINT_BRIDGE_MODE=match_on_card`. Before production, get written confirmation of three things:
+
+1. **From NIA:** the ZF1+ (with your firmware and liveness option) is an **NIA-approved device**. NIA publishes technical specifications for approved devices and card readers.
+2. **From NIA:** how a third party performs **match-on-card with the Ghana Card chip**: the applet, secure-messaging keys or certificates, and any NIA SDK. DERMALOG's generic SDK alone cannot authenticate to the Ghana Card's biometric applet.
+3. **From DERMALOG (or its Ghana distributor):** the **ZF1+ SDK**, including the match-on-card API and liveness option licences, for the workstation operating system you will use.
+
+Buy the liveness option. Without it, a fake finger may pass a match-on-card check.
+
 ## Workflow
 
 1. Staff register the customer (individual or business) and capture **data-processing consent**.
@@ -20,7 +53,7 @@ Biometric verification is used **only to confirm a customer's identity during on
    - **try again**, within the daily attempt limit
    - **refer for manual review**, where a compliance reviewer who didn't register the customer inspects the original documents and approves or rejects.
 
-The customer may decline biometrics at any point. The manual-review path remains available (`allow_manual_review`).
+A customer may decline biometrics at any point. For holders of other identity documents, the manual-review path remains available (`allow_manual_review`). A **Ghana Card holder who declines cannot complete onboarding**, because the law requires the biometric check (see above).
 
 ### Statuses
 
@@ -68,6 +101,7 @@ Simulated results are flagged `is_simulated`. In production they never satisfy o
 | `BIOMETRICS_SESSION_TTL` | `10` | Minutes a session may wait for its result |
 | `FINGERPRINT_BRIDGE_URL` | `http://127.0.0.1:15896` | Local capture agent on each onboarding workstation |
 | `FINGERPRINT_BRIDGE_SECRET` | — | Shared HMAC secret; the bridge driver is "configured" only when set |
+| `FINGERPRINT_BRIDGE_MODE` | `match_on_card` | `match_on_card` (Ghana Card in the reader, e.g. DERMALOG ZF1+) or `nia_register` |
 | `FINGERPRINT_BRIDGE_MAX_AGE` | `300` | Seconds a signed result stays valid |
 | `FINGERPRINT_MIN_MATCH_SCORE` | `0.80` | Matches scoring below this go to manual review |
 
@@ -105,31 +139,47 @@ The SPA talks to the bridge at `FINGERPRINT_BRIDGE_URL` as follows.
 `POST /capture` with
 
 ```json
-{ "attempt_id": 42, "nonce": "<40 chars from the server>", "subject": { "id_type": "ghana_card", "id_number": "...", "country": "GH" }, "expires_at": "2026-10-11T12:10:00+00:00" }
+{ "attempt_id": 42, "nonce": "<40 chars from the server>", "method": "match_on_card", "require_card": true,
+  "subject": { "id_type": "ghana_card" }, "expires_at": "2026-10-11T12:10:00+00:00" }
 ```
 
-The bridge captures the finger, runs the match, discards the image and template, and returns:
+In `nia_register` mode, `subject` also carries `id_number` and `country`, so the bridge can query the register. In `match_on_card` mode the server does **not** send the number. The bridge reads it from the chip instead.
+
+The bridge does the following:
+1. In `match_on_card` mode, reads the Ghana Card chip.
+2. Captures the finger, with the liveness check if licensed.
+3. Runs the match on the card or against the NIA register.
+4. Discards the image and template.
+5. Returns:
 
 ```json
 {
   "result": {
     "attempt_id": 42,
     "nonce": "<same nonce>",
-    "outcome": "match | no_match | poor_quality | device_error",
+    "method": "match_on_card | nia_register",
+    "outcome": "match | no_match | poor_quality | card_unreadable | device_error",
+    "card_pin": "GHA-XXXXXXXXX-X",
     "match_score": 0.93,
-    "provider_reference": "opaque-id",
+    "liveness_passed": true,
+    "provider_reference": "card/IVSP transaction id",
     "issued_at": "2026-10-11T12:01:02+00:00",
-    "device_model": "optional", "quality_score": 81, "finger": "right_index"
+    "device_model": "DERMALOG ZF1+", "quality_score": 81, "finger": "right_index"
   },
   "signature": "<hex HMAC-SHA256 of the canonical result>"
 }
 ```
 
+Field rules:
+- `card_pin` (the Ghana Card number read from the chip) is **required** for a `match` in `match_on_card` mode.
+- `liveness_passed: false` is always treated as a failure.
+
 The canonical form is the `result` object with keys sorted alphabetically, JSON-encoded without escaped slashes or unicode (`FingerprintBridgeProvider::sign()` shows the exact algorithm). The SPA forwards `{result, signature}` to `POST /api/customers/{id}/biometrics/{attempt}/complete`. The server rejects the result if any of these fail:
 - the signature check
-- the attempt id or the single-use nonce don't match
+- the attempt id, the single-use nonce or the requested `method` don't match
 - the result is older than `FINGERPRINT_BRIDGE_MAX_AGE`
 - the outcome is unknown
+- in match-on-card mode, `card_pin` isn't the customer's recorded Ghana Card number
 
 A `match` scoring below `FINGERPRINT_MIN_MATCH_SCORE` goes to manual review.
 

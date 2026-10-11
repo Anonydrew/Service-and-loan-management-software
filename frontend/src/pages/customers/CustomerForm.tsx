@@ -123,7 +123,11 @@ export function CustomerForm({ values, set, errors, lookups, editing }: Props) {
               required={!editing}
               placeholder={editing ? 'Leave blank to keep the current number' : 'e.g. GHA-000000000-0'}
               autoComplete="off"
-              hint="Stored encrypted. Only the last four characters are displayed."
+              hint={
+                values.id_type === 'ghana_card'
+                  ? 'Stored encrypted. Ghana Card holders are verified biometrically (match-on-card); do not copy or scan the card.'
+                  : 'Stored encrypted. Only the last four characters are displayed.'
+              }
             />
           </div>
         </section>

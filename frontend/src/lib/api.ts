@@ -28,23 +28,38 @@ export class ApiError extends Error {
   }
 }
 
-function readCookie(name: string): string | null {
-  const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
-  return match ? decodeURIComponent(match[1]) : null;
+/*
+ * CSRF: the token comes from /api/csrf-token and is sent as X-CSRF-TOKEN.
+ * We deliberately don't read Laravel's XSRF-TOKEN cookie: its name is fixed,
+ * so another Laravel app on the same parent domain can overwrite it.
+ */
+let csrfToken: string | null = null;
+let csrfRequest: Promise<string | null> | null = null;
+
+function ensureCsrf(force = false): Promise<string | null> {
+  if (force) {
+    csrfToken = null;
+    csrfRequest = null;
+  }
+  if (csrfToken) return Promise.resolve(csrfToken);
+
+  csrfRequest ??= fetch(`${API_BASE_URL}/api/csrf-token`, {
+    credentials: 'include',
+    headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+  })
+    .then((r) => r.json())
+    .then((d: { token: string | null }) => (csrfToken = d.token))
+    .finally(() => {
+      csrfRequest = null;
+    });
+
+  return csrfRequest;
 }
 
-let csrfReady: Promise<void> | null = null;
-
-function ensureCsrf(force = false): Promise<void> {
-  if (force) csrfReady = null;
-  else if (readCookie('XSRF-TOKEN')) return Promise.resolve();
-
-  csrfReady ??= fetch(`${API_BASE_URL}/sanctum/csrf-cookie`, {
-    credentials: 'include',
-    headers: { Accept: 'application/json' },
-  }).then(() => undefined);
-
-  return csrfReady;
+/** Call after sign-in or sign-out: the session (and so the token) may have changed. */
+export function resetCsrf(): void {
+  csrfToken = null;
+  csrfRequest = null;
 }
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -64,14 +79,11 @@ export function withQuery(path: string, query?: Query): string {
 async function request<T>(method: Method, path: string, body?: unknown, retried = false): Promise<T> {
   const mutating = method !== 'GET';
   const isForm = body instanceof FormData;
-  if (mutating) await ensureCsrf();
+  const token = mutating ? await ensureCsrf() : null;
 
   const headers: Record<string, string> = { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
   if (!isForm && body !== undefined) headers['Content-Type'] = 'application/json';
-  if (mutating) {
-    const token = readCookie('XSRF-TOKEN');
-    if (token) headers['X-XSRF-TOKEN'] = token;
-  }
+  if (token) headers['X-CSRF-TOKEN'] = token;
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,

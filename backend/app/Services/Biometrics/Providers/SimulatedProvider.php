@@ -21,7 +21,7 @@ use LogicException;
  */
 final class SimulatedProvider implements BiometricProvider
 {
-    public const OUTCOMES = ['verified', 'no_match', 'liveness_failed', 'poor_quality', 'manual_review', 'provider_unavailable'];
+    public const OUTCOMES = ['verified', 'no_match', 'liveness_failed', 'poor_quality', 'card_mismatch', 'manual_review', 'provider_unavailable'];
 
     public function __construct(private readonly string $modality)
     {
@@ -60,12 +60,15 @@ final class SimulatedProvider implements BiometricProvider
         $ref = 'SIM-'.Str::upper(Str::random(12));
         $liveness = $this->modality === 'face' ? true : null;
 
+        $meta = ['simulated' => true];
+
         return match ($outcome) {
-            'verified' => VerificationResult::verified(0.97, $liveness, $ref, ['simulated' => true]),
-            'no_match' => VerificationResult::failed('no_match', 0.31, $liveness, $ref, ['simulated' => true]),
-            'liveness_failed' => VerificationResult::failed('liveness_failed', null, false, $ref, ['simulated' => true]),
-            'poor_quality' => VerificationResult::failed('poor_quality', null, null, $ref, ['simulated' => true]),
-            'manual_review' => VerificationResult::manualReview(0.72, $liveness, $ref, ['simulated' => true]),
+            'verified' => VerificationResult::verified(0.97, $liveness, $ref, $meta, 'simulated'),
+            'no_match' => VerificationResult::failed('no_match', 0.31, $liveness, $ref, $meta, 'simulated'),
+            'liveness_failed' => VerificationResult::failed('liveness_failed', null, false, $ref, $meta, 'simulated'),
+            'poor_quality' => VerificationResult::failed('poor_quality', null, null, $ref, $meta, 'simulated'),
+            'card_mismatch' => VerificationResult::failed('card_mismatch', null, null, $ref, $meta, 'simulated'),
+            'manual_review' => VerificationResult::manualReview(0.72, $liveness, $ref, $meta, 'simulated'),
             'provider_unavailable' => throw new BiometricProviderException('provider_unavailable'),
             default => throw new BiometricProviderException('interrupted', 'Choose a simulated outcome.'),
         };

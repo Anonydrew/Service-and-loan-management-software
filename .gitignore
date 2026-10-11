@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!.env.production.example
 
 # Local databases and uploaded customer documents
 *.sqlite
@@ -19,3 +20,9 @@ frontend/dist/
 Thumbs.db
 .idea/
 .vscode/
+
+# Web app build copied into Laravel's public folder for deployment
+backend/public/index.html
+backend/public/assets/
+backend/public/favicon.svg
+deploy/out/

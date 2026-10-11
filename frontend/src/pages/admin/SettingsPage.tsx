@@ -69,6 +69,10 @@ export default function SettingsPage() {
           <Card>
             <CardHeader title="Onboarding & identity verification policy" description="Set these according to your lawful onboarding (KYC) policy." />
             <div className="space-y-4">
+              <Alert tone="blue" title="Ghana Card holders: always verified biometrically">
+                Required by L.I. 2523 and not configurable: Ghana Card holders (including business signatories) must pass match-on-card or NIA register verification, card images cannot be
+                uploaded, and manual review cannot approve them by inspection. The settings below apply to other identity documents and to additional checks.
+              </Alert>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Documents</p>
               <Checkbox checked={!!ob.individual_requires_id_document} onChange={(v) => setOb('individual_requires_id_document', v)} label="Individuals must provide an identity document" />
               <Checkbox checked={!!ob.require_document_verification} onChange={(v) => setOb('require_document_verification', v)} label="Documents must be verified by an authorised person" description="Otherwise an unexpired uploaded document is enough." />

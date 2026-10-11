@@ -23,6 +23,10 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         // Sanctum SPA cookie authentication for the React frontend.
         $middleware->statefulApi();
+        // There is no server-side login page: API guests get a JSON 401 (even
+        // for file downloads, which don't ask for JSON); anything else goes to
+        // the web app's sign-in screen.
+        $middleware->redirectGuestsTo(fn (Request $request) => $request->is('api/*') ? null : '/login');
         $middleware->append(SecurityHeaders::class);
         $middleware->alias([
             'tenant' => BindTenant::class,

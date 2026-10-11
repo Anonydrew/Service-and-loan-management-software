@@ -33,6 +33,9 @@ return [
             // wrapping the scanner vendor's SDK. The browser talks to it on
             // loopback; it returns an HMAC-signed result, never a template.
             'url' => env('FINGERPRINT_BRIDGE_URL', 'http://127.0.0.1:15896'),
+            // match_on_card (Ghana Card in the reader, e.g. DERMALOG ZF1+) or
+            // nia_register (live finger against the NIA register via IVSP).
+            'mode' => env('FINGERPRINT_BRIDGE_MODE', 'match_on_card'),
             'secret' => env('FINGERPRINT_BRIDGE_SECRET'),
             'max_result_age_seconds' => (int) env('FINGERPRINT_BRIDGE_MAX_AGE', 300),
             'min_match_score' => (float) env('FINGERPRINT_MIN_MATCH_SCORE', 0.80),

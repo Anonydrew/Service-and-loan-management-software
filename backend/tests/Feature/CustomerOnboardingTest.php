@@ -74,8 +74,10 @@ class CustomerOnboardingTest extends TestCase
         $officer = $this->staff($company, 'loan-officer', $branch);
         $compliance = $this->staff($company, 'compliance-officer', $branch);
 
+        // A passport holder follows the document path; Ghana Card holders are
+        // verified biometrically (see GhanaCardComplianceTest).
         $this->actingAsUser($officer);
-        $id = $this->postJson('/api/customers', $this->individualPayload(['branch_id' => $branch->id]))->json('customer.id');
+        $id = $this->postJson('/api/customers', $this->individualPayload(['branch_id' => $branch->id, 'id_type' => 'passport', 'id_number' => 'G0123456']))->json('customer.id');
 
         // Completing too early lists what is missing.
         $this->postJson("/api/customers/{$id}/onboarding/complete")
@@ -84,8 +86,8 @@ class CustomerOnboardingTest extends TestCase
         $this->postJson("/api/customers/{$id}/consents", ['consent_type' => 'data_processing', 'granted' => true, 'capture_method' => 'signed_form'])->assertCreated();
 
         $docId = $this->postJson("/api/customers/{$id}/documents", [
-            'file' => UploadedFile::fake()->image('ghana-card.jpg'), 'document_type' => 'ghana_card',
-            'document_number' => 'GHA-123456789-0', 'expiry_date' => now()->addYears(5)->toDateString(),
+            'file' => UploadedFile::fake()->image('passport.jpg'), 'document_type' => 'passport',
+            'document_number' => 'G0123456', 'expiry_date' => now()->addYears(5)->toDateString(),
         ])->assertCreated()->assertJsonMissingPath('file_path')->json('id');
 
         // The uploader is not allowed to verify their own upload (and lacks the permission anyway).
@@ -151,7 +153,7 @@ class CustomerOnboardingTest extends TestCase
 
         $keys = collect($response->json('onboarding.items'))->pluck('key');
         $this->assertTrue($keys->contains('registration_document'));
-        $this->assertTrue($keys->contains(fn ($k) => str_starts_with($k, 'representative_id_')));
+        $this->assertTrue($keys->contains(fn ($k) => str_starts_with($k, 'ghana_card_biometric_')), 'a Ghana Card signatory must be verified biometrically');
         $this->assertFalse($keys->contains('id_document'), 'a business is not asked for a personal ID of its own');
         $this->assertTrue($response->json('customer.representatives.0.is_primary'));
     }
@@ -162,7 +164,7 @@ class CustomerOnboardingTest extends TestCase
         ['company' => $company, 'branch' => $branch] = $this->newCompany();
         $officer = $this->staff($company, 'loan-officer', $branch);
         $compliance = $this->staff($company, 'compliance-officer', $branch);
-        $customer = $this->individualCustomer($company, $branch, onboarded: false, actor: $officer);
+        $customer = $this->individualCustomer($company, $branch, ['id_type' => 'passport', 'id_number' => 'G7654321'], onboarded: false, actor: $officer);
 
         $this->actingAsUser($officer);
         $this->postJson("/api/customers/{$customer->id}/onboarding/refer", ['reason' => 'Customer declined biometrics'])
@@ -173,7 +175,7 @@ class CustomerOnboardingTest extends TestCase
 
         $this->actingAsUser($compliance);
         $this->assertCount(1, $this->getJson('/api/onboarding/review-queue')->assertOk()->json('data'));
-        $this->postJson("/api/customers/{$customer->id}/onboarding/decide", ['decision' => 'approve', 'notes' => 'Original Ghana Card inspected in person.'])
+        $this->postJson("/api/customers/{$customer->id}/onboarding/decide", ['decision' => 'approve', 'notes' => 'Original passport inspected in person.'])
             ->assertOk()->assertJsonPath('status', 'active')->assertJsonPath('verification_status', 'verified');
 
         $this->assertSame($compliance->id, Customer::query()->withoutGlobalScopes()->find($customer->id)->reviewed_by);

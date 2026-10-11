@@ -1,83 +1,57 @@
 # Deployment
 
-The recommended layout serves the SPA and the API from **one site**, so Sanctum session cookies are first-party and no CORS is needed:
+**Hostinger:** follow the step-by-step guide in [DEPLOY-HOSTINGER.md](DEPLOY-HOSTINGER.md). This page summarises
+the same setup for any Apache/LiteSpeed host or VPS.
+
+## Layout
+
+The web app and the API are served from **one address**:
 
 ```
-https://app.example.com/            → frontend/dist (static SPA, index.html fallback)
-https://app.example.com/api/*       → Laravel backend/public/index.php
-https://app.example.com/sanctum/*   → Laravel backend/public/index.php
+https://loans.example.com/            → web app (frontend build copied into backend/public)
+https://loans.example.com/api/*       → Laravel API
 ```
 
-## 1. Build
+- The domain's document root is `backend/public` (or a symlink to it). Nothing else in the repository may be web-reachable.
+- `deploy/build-frontend.ps1` builds the app into `deploy/out/web-app.zip`. Extract it into `backend/public`, next to `index.php`. Git ignores these files.
+- Laravel serves `index.html` for every non-API path (`routes/web.php`), so deep links and refreshes work. The page is sent `no-cache`; hashed JS and CSS files are cached for a year (`public/.htaccess`).
+- The SPA authenticates with Sanctum session cookies. It reads its CSRF token from `GET /api/csrf-token` and sends it as `X-CSRF-TOKEN`. It does not rely on the `XSRF-TOKEN` cookie, which other Laravel apps on the same parent domain would overwrite.
 
-```bash
-cd frontend && npm ci && npm run build            # → frontend/dist
-cd ../backend && php ../composer.phar install --no-dev --optimize-autoloader
-```
+## Environment
 
-Copy the contents of `frontend/dist/` into `backend/public/`, next to `index.php`. With Apache, add an SPA fallback to `backend/public/.htaccess` **before** Laravel's front-controller rule:
+Start from [`backend/.env.production.example`](../backend/.env.production.example). Key points:
+- `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL` = the public address.
+- `SESSION_DOMAIN=null` (host-only cookie), a unique `SESSION_COOKIE` name, `SESSION_SECURE_COOKIE=true`, `SESSION_ENCRYPT=true`.
+- `SANCTUM_STATEFUL_DOMAINS` = the host (no scheme).
+- `QUEUE_CONNECTION=sync`: nothing is queued.
+- `BIOMETRICS_ALLOW_SIMULATED=false`. The simulator is refused in production anyway.
 
-```apache
-# Serve the SPA for any non-API path that isn't a real file
-RewriteCond %{REQUEST_URI} !^/(api|sanctum|up)(/|$)
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteRule ^ index.html [L]
-```
+Generate `APP_KEY` once and **back it up**. Losing it makes encrypted identity numbers and biometric references unrecoverable.
 
-On shared hosting (e.g. Hostinger), point the domain's document root at `backend/public`, or symlink `public_html` to it.
+## Install and update
 
-## 2. Environment
+| | Command |
+|---|---|
+| First install | `bash deploy/server-install.sh` (after filling in `.env`), then `php artisan app:create-company "Name" --admin-name=... --admin-email=...` |
+| Update | `bash deploy/server-update.sh` (pull, composer, maintenance mode, migrate, rebuild caches) |
 
-```dotenv
-APP_ENV=production
-APP_DEBUG=false
-APP_URL=https://app.example.com
-DB_CONNECTION=mysql
-SESSION_DRIVER=database
-SESSION_ENCRYPT=true
-SESSION_SECURE_COOKIE=true
-SESSION_DOMAIN=app.example.com
-SANCTUM_STATEFUL_DOMAINS=app.example.com
-CORS_ALLOWED_ORIGINS=https://app.example.com
-BIOMETRICS_ALLOW_SIMULATED=false
-```
+Both scripts call Composer with `--no-scripts` and run `package:discover` separately, because shared hosts often disable `proc_open`. Never run `db:seed`, `migrate:fresh` or `migrate:rollback` in production. The demo seeder refuses to run there, and its passwords are public.
 
-Generate `APP_KEY` once (`php artisan key:generate`) and **store it in your secrets vault**. Losing it makes encrypted identity numbers and biometric references unrecoverable.
+## Scheduled jobs
 
-## 3. Database and first company
+| Command | When | |
+|---|---|---|
+| `php artisan loans:process-daily` | daily 00:30 | penalties, arrears, loan status |
+| `php artisan biometrics:purge-expired` | daily 02:00 | biometric retention |
 
-```bash
-php artisan migrate --force
-php artisan app:create-company "Your Company Ltd" --admin-name="Jane Doe" --admin-email=jane@yourco.com
-php artisan config:cache && php artisan route:cache && php artisan view:cache
-```
+On a VPS, a single `* * * * * php artisan schedule:run` covers both. On shared hosting without `proc_open`, add them as two separate cron jobs.
 
-Never run `db:seed` in production. The demo seeder refuses to run there, and its passwords are public.
+## Hardening checklist
 
-**Upgrades:** take a backup, run `php artisan down`, deploy the code, `php artisan migrate --force`, rebuild the caches, then `php artisan up`. Migrations are additive. Don't run `migrate:fresh` or `migrate:rollback` against production.
-
-## 4. Scheduler
-
-Add one cron entry:
-
-```
-* * * * * cd /path/to/backend && php artisan schedule:run >> /dev/null 2>&1
-```
-
-This runs `loans:process-daily` (00:30) and `biometrics:purge-expired` (02:00). No queue worker is required: notifications and audit entries are written synchronously.
-
-## 5. Files and permissions
-
-- `storage/` and `bootstrap/cache/` must be writable by the web server.
-- Identity documents are stored in `storage/app/private/customer-documents/{company}/{customer}/`. Include this directory in backups and keep it **outside** the web root (the default).
-
-## 6. Hardening checklist
-
-- [ ] HTTPS everywhere; HSTS is sent automatically on HTTPS requests.
-- [ ] `APP_DEBUG=false`; `BIOMETRICS_ALLOW_SIMULATED=false`.
-- [ ] Database user limited to this schema; daily encrypted backups of the database and `storage/app/private`, with a tested restore.
-- [ ] `APP_KEY` and provider secrets stored outside the repository.
-- [ ] Change the first administrator's password on first sign-in; give staff least-privilege roles and branch assignments.
-- [ ] Review the onboarding policy in Settings with your compliance officer, and register as a data controller where required (Ghana Data Protection Act, 2012, Act 843).
-- [ ] Configure an SMS driver if customers should receive receipts; the default `log` driver sends nothing.
-- [ ] Monitor `storage/logs/laravel.log` for reported exceptions, including failed audit writes.
+- [ ] HTTPS everywhere. HSTS is sent automatically on HTTPS requests.
+- [ ] `APP_DEBUG=false`; Settings → Integrations never shows "Simulator".
+- [ ] A database user limited to this schema; daily backups of the database and `storage/app/private`, with a tested restore.
+- [ ] `APP_KEY` and any provider secrets stored outside the server and the repository.
+- [ ] Staff on least-privilege roles and branch assignments. Second-person approvals (loan decisions, refunds, document verification, manual review) held by different people.
+- [ ] Onboarding policy reviewed with your compliance officer. Registered as a data controller where required (Data Protection Act, 2012, Act 843). L.I. 2523 duties for Ghana Card holders understood (see BIOMETRICS.md).
+- [ ] An SMS driver configured if customers should receive receipts. The default `log` driver sends nothing.

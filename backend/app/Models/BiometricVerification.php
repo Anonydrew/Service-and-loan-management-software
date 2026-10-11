@@ -47,6 +47,9 @@ class BiometricVerification extends Model
         'interrupted' => 'The verification session was interrupted before it finished.',
         'expired' => 'The verification session expired before a result was received.',
         'invalid_signature' => 'The result could not be authenticated and was rejected.',
+        'card_required' => 'Match-on-card verification needs the person\'s Ghana Card. Use NIA register verification for other identity documents.',
+        'card_mismatch' => 'The card in the reader does not belong to this person. Ask for their own Ghana Card.',
+        'card_unreadable' => 'The Ghana Card chip could not be read. Clean the chip, re-insert the card and try again.',
     ];
 
     protected $fillable = [];

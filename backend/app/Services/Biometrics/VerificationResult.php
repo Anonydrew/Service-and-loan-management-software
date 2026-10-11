@@ -17,6 +17,8 @@ final class VerificationResult
         public readonly ?bool $livenessPassed = null,
         public readonly ?string $providerReference = null,
         public readonly array $metadata = [],
+        /** How identity was confirmed: match_on_card, nia_register, provider-specific, or simulated. */
+        public readonly ?string $method = null,
     ) {
         if (! in_array($status, [BiometricVerification::STATUS_VERIFIED, BiometricVerification::STATUS_FAILED, BiometricVerification::STATUS_MANUAL_REVIEW], true)) {
             throw new InvalidArgumentException("Invalid verification outcome [{$status}].");
@@ -27,18 +29,18 @@ final class VerificationResult
         }
     }
 
-    public static function verified(float $score, ?bool $liveness, ?string $reference, array $metadata = []): self
+    public static function verified(float $score, ?bool $liveness, ?string $reference, array $metadata = [], ?string $method = null): self
     {
-        return new self(BiometricVerification::STATUS_VERIFIED, null, $score, $liveness, $reference, $metadata);
+        return new self(BiometricVerification::STATUS_VERIFIED, null, $score, $liveness, $reference, $metadata, $method);
     }
 
-    public static function failed(string $reason, ?float $score = null, ?bool $liveness = null, ?string $reference = null, array $metadata = []): self
+    public static function failed(string $reason, ?float $score = null, ?bool $liveness = null, ?string $reference = null, array $metadata = [], ?string $method = null): self
     {
-        return new self(BiometricVerification::STATUS_FAILED, $reason, $score, $liveness, $reference, $metadata);
+        return new self(BiometricVerification::STATUS_FAILED, $reason, $score, $liveness, $reference, $metadata, $method);
     }
 
-    public static function manualReview(?float $score, ?bool $liveness, ?string $reference, array $metadata = []): self
+    public static function manualReview(?float $score, ?bool $liveness, ?string $reference, array $metadata = [], ?string $method = null): self
     {
-        return new self(BiometricVerification::STATUS_MANUAL_REVIEW, null, $score, $liveness, $reference, $metadata);
+        return new self(BiometricVerification::STATUS_MANUAL_REVIEW, null, $score, $liveness, $reference, $metadata, $method);
     }
 }

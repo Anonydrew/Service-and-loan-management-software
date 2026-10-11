@@ -19,7 +19,7 @@ final class ConsentService
     /** The consent wording shown to the customer, per type. */
     public const TEXTS = [
         'data_processing' => 'I agree that the company may collect, store and process my personal information and identity documents to open and manage my account, as described in its privacy notice.',
-        'biometric_processing' => 'I agree that my facial image and/or fingerprint may be captured and compared against my identity record by the company\'s verification provider, solely to verify my identity during onboarding. Raw images and fingerprint templates are not kept in the company\'s customer records. I may decline and ask for a manual identity check instead.',
+        'biometric_processing' => 'I agree that my fingerprint and/or facial image may be captured and compared against my Ghana Card chip or the National Identity Register (or, for other identity documents, by the company\'s verification provider), solely to verify my identity during onboarding. Raw images and fingerprint templates are not kept in the company\'s customer records. I understand that Ghana Card holders must be verified biometrically under L.I. 2523, so if I decline, the company may be unable to complete my onboarding.',
         'credit_check' => 'I authorise the company to obtain my credit report from a licensed credit bureau to assess loan applications.',
         'marketing' => 'I agree to receive information about products and services by SMS or email. I can opt out at any time.',
     ];

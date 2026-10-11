@@ -170,7 +170,7 @@ class DemoSeeder extends Seeder
                 $c->forceFill(['status' => 'active', 'onboarding_status' => 'completed', 'verification_status' => 'verified',
                     'onboarded_at' => now()->subMonths(5), 'onboarded_by' => $users['compliance-officer']->id,
                     'reviewed_by' => $users['compliance-officer']->id, 'reviewed_at' => now()->subMonths(5),
-                    'review_notes' => 'Demo data: identity checked against original Ghana Card.'])->save();
+                    'review_notes' => 'Demo data: seeded as already verified (no real Ghana Card check took place).'])->save();
                 $onboarded[] = $c;
             }
         }
@@ -178,7 +178,7 @@ class DemoSeeder extends Seeder
         // A customer waiting for manual review, and a business mid-onboarding.
         $pending = Customer::query()->where('first_name', 'Esi')->first();
         $pending?->forceFill(['onboarding_status' => 'manual_review', 'verification_status' => 'manual_review',
-            'manual_review_reason' => 'Customer declined biometric capture; Ghana Card photo is worn.'])->save();
+            'manual_review_reason' => 'Fingerprint scanner unavailable at the branch; customer to return for match-on-card verification.'])->save();
 
         $biz = $customers->create([
             'type' => 'business', 'branch_id' => $hq->id, 'business_name' => 'Kente Crafts Enterprise', 'registration_number' => 'BN000123456',

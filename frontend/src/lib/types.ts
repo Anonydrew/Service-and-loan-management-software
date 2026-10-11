@@ -170,6 +170,7 @@ export interface BiometricAttempt {
   id: number;
   modality: 'face' | 'fingerprint';
   provider: string;
+  verification_method: string | null;
   is_simulated: boolean;
   status: string;
   failure_reason: string | null;

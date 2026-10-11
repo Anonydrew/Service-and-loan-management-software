@@ -227,7 +227,9 @@ function Overview({ customer: c, checklist, onStatus }: { customer: Customer; ch
         )}
       </div>
       <div className="space-y-6">
-        {c.onboarding_status === 'manual_review' && can('onboarding.review') && <ReviewDecision customer={c} />}
+        {c.onboarding_status === 'manual_review' && can('onboarding.review') && (
+          <ReviewDecision customer={c} approveBlocked={checklist.some((i) => i.key.startsWith('ghana_card_biometric') && i.status !== 'complete')} />
+        )}
         <Card>
           <CardHeader title="Onboarding" />
           <DescriptionList

@@ -11,6 +11,7 @@ use App\Models\CustomerRepresentative;
 use App\Services\Notifications\StaffNotifier;
 use App\Support\Audit\AuditLogger;
 use App\Support\BusinessRuleException;
+use App\Support\GhanaCard;
 use App\Support\Tenancy\Tenant;
 use Illuminate\Support\Facades\DB;
 
@@ -37,6 +38,10 @@ final class OnboardingService
         $policy = (array) Tenant::company()->setting('onboarding');
         $items = [];
         $add = function (string $key, string $label, bool $required, bool $done, string $detail, bool $inProgress = false) use (&$items): void {
+            if (collect($items)->contains('key', $key)) {
+                return;
+            }
+
             $items[] = [
                 'key' => $key,
                 'label' => $label,
@@ -59,11 +64,15 @@ final class OnboardingService
                 && $customer->date_of_birth !== null && filled($customer->id_type) && filled($customer->id_number);
             $add('details', 'Personal details', true, $detailsOk, $detailsOk ? 'Complete.' : 'Name, phone, date of birth and ID number are required.');
 
-            $idDocs = $documents->filter(fn ($d) => $d->representative_id === null && in_array($d->document_type, CustomerDocument::IDENTITY_TYPES, true));
-            $add('id_document', 'Identity document', (bool) $policy['individual_requires_id_document'],
-                $idDocs->contains($docOk), $this->documentDetail($idDocs), $idDocs->contains(fn ($d) => $d->status === 'pending'));
+            if (GhanaCard::applies($customer->id_type)) {
+                $this->ghanaCardItem($customer, null, $add, $customer->display_name);
+            } else {
+                $idDocs = $documents->filter(fn ($d) => $d->representative_id === null && in_array($d->document_type, CustomerDocument::IDENTITY_TYPES, true));
+                $add('id_document', 'Identity document', (bool) $policy['individual_requires_id_document'],
+                    $idDocs->contains($docOk), $this->documentDetail($idDocs), $idDocs->contains(fn ($d) => $d->status === 'pending'));
+            }
 
-            $this->biometricItems($customer, null, (bool) $policy['individual_requires_face'], (bool) $policy['individual_requires_fingerprint'], $add, 'customer');
+            $this->biometricItems($customer, null, (bool) $policy['individual_requires_face'], (bool) $policy['individual_requires_fingerprint'], $add, $customer->display_name);
         } else {
             $detailsOk = filled($customer->business_name) && filled($customer->registration_number) && filled($customer->phone) && filled($customer->business_type);
             $add('details', 'Business details', true, $detailsOk, $detailsOk ? 'Complete.' : 'Business name, registration number, type and phone are required.');
@@ -76,8 +85,12 @@ final class OnboardingService
             $add('representatives', 'Authorised representative', true, $reps->isNotEmpty(),
                 $reps->isEmpty() ? 'Add at least one director or authorised signatory.' : $reps->count().' representative(s).');
 
-            if ($policy['business_requires_representative_id']) {
-                foreach ($reps->where('is_signatory', true) as $rep) {
+            foreach ($reps->where('is_signatory', true) as $rep) {
+                // A signatory identified by Ghana Card must be verified biometrically
+                // whatever the company policy says: that requirement is law.
+                if (GhanaCard::applies($rep->id_type)) {
+                    $this->ghanaCardItem($customer, $rep, $add, $rep->full_name);
+                } elseif ($policy['business_requires_representative_id']) {
                     $repDocs = $documents->filter(fn ($d) => $d->representative_id === $rep->id && in_array($d->document_type, CustomerDocument::IDENTITY_TYPES, true));
                     $add("representative_id_{$rep->id}", "Identity document - {$rep->full_name}", true,
                         $repDocs->contains($docOk), $this->documentDetail($repDocs), $repDocs->contains(fn ($d) => $d->status === 'pending'));
@@ -171,6 +184,15 @@ final class OnboardingService
             throw new BusinessRuleException('Data processing consent is required before approval.', 'consent_required');
         }
 
+        // L.I. 2523: visual inspection cannot confirm a Ghana Card holder.
+        if ($approve && ($pending = $this->unverifiedGhanaCardHolders($customer)) !== []) {
+            throw new BusinessRuleException(
+                'Ghana Card holders can only be approved after biometric verification (match-on-card or NIA register), not by inspection. Still unverified: '.implode(', ', $pending).'.',
+                'ghana_card_biometric_required',
+                ['unverified' => $pending],
+            );
+        }
+
         DB::transaction(function () use ($customer, $approve, $notes, $user): void {
             $customer->forceFill([
                 'status' => $approve ? 'active' : 'rejected',
@@ -212,6 +234,49 @@ final class OnboardingService
         };
 
         $customer->forceFill(['verification_status' => $status])->save();
+    }
+
+    /**
+     * L.I. 2523: a Ghana Card holder is confirmed only by a biometric match
+     * (match-on-card or the NIA register), never by an image or inspection.
+     */
+    private function ghanaCardItem(Customer $customer, ?CustomerRepresentative $rep, callable $add, string $subject): void
+    {
+        $suffix = $rep ? "_{$rep->id}" : '';
+
+        $bioConsent = $this->consents->active($customer, 'biometric_processing', $rep?->id);
+        $add("biometric_consent{$suffix}", "Biometric consent - {$subject}", true, $bioConsent !== null,
+            $bioConsent ? 'Recorded.' : 'Required before the Ghana Card biometric check.');
+
+        $attempts = $customer->biometricVerifications()->where('representative_id', $rep?->id)->latest('id')->get();
+        $verified = $attempts->first(fn (BiometricVerification $a) => $a->status === BiometricVerification::STATUS_VERIFIED
+            && (! $a->is_simulated || ! app()->isProduction()));
+        $latest = $attempts->first();
+
+        $detail = match (true) {
+            $verified !== null => sprintf('Verified %s by %s%s.', $verified->completed_at?->toDateString(),
+                str_replace('_', ' ', $verified->verification_method ?? $verified->modality), $verified->is_simulated ? ' (SIMULATED - not a real verification)' : ''),
+            $latest !== null => 'Last attempt: '.str_replace('_', ' ', $latest->status).($latest->failure_reason ? ' - '.str_replace('_', ' ', $latest->failure_reason) : '').'.',
+            default => 'Required by law: verify by match-on-card or against the NIA register. Ghana Card images may not be stored.',
+        };
+
+        $add("ghana_card_biometric{$suffix}", "Ghana Card biometric verification - {$subject}", true, $verified !== null, $detail,
+            $latest?->status === BiometricVerification::STATUS_PENDING);
+    }
+
+    /**
+     * Ghana Card holders on this customer who have not yet been verified
+     * biometrically. Manual review may not approve while any remain.
+     *
+     * @return list<string>
+     */
+    public function unverifiedGhanaCardHolders(Customer $customer): array
+    {
+        return collect($this->checklist($customer))
+            ->filter(fn ($i) => str_starts_with($i['key'], 'ghana_card_biometric') && $i['status'] !== 'complete')
+            ->map(fn ($i) => trim(str_replace('Ghana Card biometric verification -', '', $i['label'])))
+            ->values()
+            ->all();
     }
 
     private function biometricItems(Customer $customer, ?CustomerRepresentative $rep, bool $face, bool $fingerprint, callable $add, string $subject): void

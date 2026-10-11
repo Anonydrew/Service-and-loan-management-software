@@ -10,7 +10,7 @@ import { useToast } from '../../components/Toast';
 import { customerKeys } from './shared';
 
 interface ProviderStatus {
-  providers: Record<'face' | 'fingerprint', { provider: string; configured: boolean; simulated: boolean }>;
+  providers: Record<'face' | 'fingerprint', { provider: string; configured: boolean; simulated: boolean; method: string | null }>;
   policy: Record<string, boolean | number | string>;
   failure_reasons: Record<string, string>;
 }
@@ -37,14 +37,18 @@ export function BiometricPanel({ customer, onReferForReview }: { customer: Custo
   const reps = customer.representatives ?? [];
   const [repId, setRepId] = useState<number | null>(customer.type === 'business' ? (reps.find((r) => r.is_primary)?.id ?? reps[0]?.id ?? null) : null);
   const policy = providers.data?.policy ?? {};
+  const subjectIdType = customer.type === 'business' ? reps.find((r) => r.id === repId)?.id_type : customer.id_type;
+  // L.I. 2523: a Ghana Card holder must be verified biometrically, by either method.
+  const ghanaCard = subjectIdType === 'ghana_card';
   const faceRequired = customer.type === 'business' ? !!policy.representative_requires_face : !!policy.individual_requires_face;
   const fingerprintRequired = customer.type === 'individual' && !!policy.individual_requires_fingerprint;
-  const [modality, setModality] = useState<Modality>(fingerprintRequired && !faceRequired ? 'fingerprint' : 'face');
+  const [modality, setModality] = useState<Modality>(ghanaCard || (fingerprintRequired && !faceRequired) ? 'fingerprint' : 'face');
 
   const open = !['completed', 'rejected'].includes(customer.onboarding_status);
   const canCapture = can('biometrics.capture') && open;
   const hasConsent = (consents.data?.data ?? []).some((c) => c.consent_type === 'biometric_processing' && c.granted && !c.withdrawn_at && (c.representative?.id ?? null) === repId);
   const status = providers.data?.providers[modality];
+  const matchOnCard = modality === 'fingerprint' && status?.method === 'match_on_card';
 
   if (providers.isLoading || attempts.isLoading) return <LoadingBlock rows={4} />;
 
@@ -53,6 +57,13 @@ export function BiometricPanel({ customer, onReferForReview }: { customer: Custo
       <Alert tone="neutral" icon={<Info className="size-4" />} title="Onboarding identity check only">
         Biometrics are used once, to confirm the customer is the person on their identity document. They are never used for sign-in, repayments, disbursements or other transactions.
       </Alert>
+
+      {open && ghanaCard && (
+        <Alert tone="blue" icon={<ShieldAlert className="size-4" />} title="Ghana Card holder: biometric verification is required by law">
+          Under L.I. 2523 a Ghana Card holder's identity must be confirmed by a biometric match: <strong>match-on-card</strong> (card in the fingerprint reader) or against the{' '}
+          <strong>NIA register</strong>. Looking at the card, or keeping a copy or image of it, is not allowed, and manual review cannot approve without this check.
+        </Alert>
+      )}
 
       {open && (
         <Card>
@@ -77,7 +88,7 @@ export function BiometricPanel({ customer, onReferForReview }: { customer: Custo
               {(
                 [
                   ['face', ScanFace, 'Face', faceRequired],
-                  ['fingerprint', Fingerprint, 'Fingerprint', fingerprintRequired],
+                  ['fingerprint', Fingerprint, providers.data?.providers.fingerprint.method === 'match_on_card' ? 'Fingerprint · Ghana Card' : 'Fingerprint', fingerprintRequired || ghanaCard],
                 ] as const
               ).map(([m, Icon, text, required]) => (
                 <button
@@ -89,7 +100,7 @@ export function BiometricPanel({ customer, onReferForReview }: { customer: Custo
                 >
                   <Icon className="size-4" />
                   {text}
-                  {required ? <Badge tone="amber">Required</Badge> : <span className="text-xs font-normal text-slate-400">Optional</span>}
+                  {required ? <Badge tone="amber">{ghanaCard && m === 'fingerprint' && !fingerprintRequired ? 'Required by law' : 'Required'}</Badge> : <span className="text-xs font-normal text-slate-400">Optional</span>}
                 </button>
               ))}
             </div>
@@ -102,9 +113,12 @@ export function BiometricPanel({ customer, onReferForReview }: { customer: Custo
           ) : !status?.configured ? (
             <Alert tone="amber" icon={<ShieldAlert className="size-4" />} title={`${modality === 'face' ? 'Facial' : 'Fingerprint'} verification is not set up`}>
               {modality === 'face'
-                ? 'No facial verification provider is configured, so no face match can be performed. Verify the identity document instead and, if company policy requires biometrics, refer the customer for manual review.'
-                : 'Fingerprint verification needs a compatible scanner on this workstation and the capture bridge service configured by your administrator. Use document verification and manual review instead.'}
-              {onReferForReview && (
+                ? 'No facial verification provider is configured, so no face match can be performed.'
+                : 'Fingerprint verification needs a compatible scanner (e.g. DERMALOG ZF1+) on this workstation and the capture bridge service configured by your administrator.'}{' '}
+              {ghanaCard
+                ? 'Ghana Card holders cannot be onboarded without a biometric check. Try the other method, or ask the customer to return once verification is available.'
+                : 'Verify the identity document instead and, if company policy requires biometrics, refer the customer for manual review.'}
+              {onReferForReview && !ghanaCard && (
                 <div className="mt-3">
                   <Button size="sm" variant="secondary" onClick={onReferForReview}>
                     Go to manual review
@@ -114,12 +128,13 @@ export function BiometricPanel({ customer, onReferForReview }: { customer: Custo
             </Alert>
           ) : !hasConsent ? (
             <Alert tone="amber" title="Biometric consent needed">
-              Record the {customer.type === 'business' ? "representative's" : "customer's"} biometric consent on the Consent step first. If they decline, refer them for manual review.
+              Record the {customer.type === 'business' ? "representative's" : "customer's"} biometric consent on the Consent step first.{' '}
+              {ghanaCard ? 'A Ghana Card holder who declines cannot complete onboarding.' : 'If they decline, refer them for manual review.'}
             </Alert>
           ) : modality === 'face' ? (
-            <FaceCapture key={`face-${repId}`} customerId={customer.id} repId={repId} simulated={!!status.simulated} onReferForReview={onReferForReview} />
+            <FaceCapture key={`face-${repId}`} customerId={customer.id} repId={repId} simulated={!!status.simulated} onReferForReview={ghanaCard ? undefined : onReferForReview} />
           ) : (
-            <FingerprintCapture key={`fp-${repId}`} customerId={customer.id} repId={repId} simulated={!!status.simulated} onReferForReview={onReferForReview} />
+            <FingerprintCapture key={`fp-${repId}`} customerId={customer.id} repId={repId} simulated={!!status.simulated} matchOnCard={matchOnCard} onReferForReview={ghanaCard ? undefined : onReferForReview} />
           )}
         </Card>
       )}
@@ -236,6 +251,7 @@ const SIM_OUTCOMES = [
   ['no_match', 'No match'],
   ['liveness_failed', 'Liveness check failed'],
   ['poor_quality', 'Poor capture quality'],
+  ['card_mismatch', 'Card belongs to someone else'],
   ['manual_review', 'Inconclusive (manual review)'],
   ['provider_unavailable', 'Provider outage'],
 ] as const;
@@ -410,7 +426,19 @@ function FaceCapture({ customerId, repId, simulated, onReferForReview }: { custo
 
 /* ------------------------------------------------------------ Fingerprint */
 
-function FingerprintCapture({ customerId, repId, simulated, onReferForReview }: { customerId: number; repId: number | null; simulated: boolean; onReferForReview?: () => void }) {
+function FingerprintCapture({
+  customerId,
+  repId,
+  simulated,
+  matchOnCard,
+  onReferForReview,
+}: {
+  customerId: number;
+  repId: number | null;
+  simulated: boolean;
+  matchOnCard: boolean;
+  onReferForReview?: () => void;
+}) {
   const { attempt, client, busy, start, finish, reset } = useAttempt(customerId);
   const [phase, setPhase] = useState<'idle' | 'detecting' | 'ready' | 'scanning'>('idle');
   const [deviceInfo, setDeviceInfo] = useState<string>('');
@@ -482,8 +510,17 @@ function FingerprintCapture({ customerId, repId, simulated, onReferForReview }: 
         <div className="flex size-14 items-center justify-center rounded-full bg-brand-50 text-brand-700">
           <Fingerprint className="size-7" />
         </div>
-        <p className="mt-3 font-medium text-slate-900">Fingerprint verification</p>
-        <p className="mt-2 max-w-md text-sm text-slate-500">Requires a compatible scanner connected to this computer and the capture bridge service. {simulated ? 'The development simulator is active.' : ''}</p>
+        <p className="mt-3 font-medium text-slate-900">{matchOnCard ? 'Ghana Card match-on-card' : 'Fingerprint verification'}</p>
+        {matchOnCard ? (
+          <ol className="mt-2 max-w-md list-decimal space-y-1 pl-5 text-left text-sm text-slate-500">
+            <li>Ask the customer to insert their own Ghana Card, chip first, into the card slot of the fingerprint reader.</li>
+            <li>Start verification, then ask them to place their finger flat on the scanner.</li>
+            <li>The finger is matched against the card's chip, and the card number is checked against this customer's record.</li>
+          </ol>
+        ) : (
+          <p className="mt-2 max-w-md text-sm text-slate-500">Requires a compatible scanner connected to this computer and the capture bridge service.</p>
+        )}
+        {simulated && <p className="mt-2 text-xs text-violet-700">The development simulator is active.</p>}
         <Button className="mt-5" icon={<Fingerprint className="size-4" />} loading={busy} onClick={begin}>
           Start fingerprint verification
         </Button>
@@ -504,7 +541,13 @@ function FingerprintCapture({ customerId, repId, simulated, onReferForReview }: 
         phase !== 'detecting' && (
           <div className="flex flex-col items-center rounded-xl border border-slate-200 p-6 text-center">
             <Fingerprint className={cx('size-12 text-brand-700', phase === 'scanning' && 'animate-pulse')} />
-            <p className="mt-3 font-medium text-slate-900">{phase === 'scanning' ? 'Scanning…' : 'Ask the customer to place their finger on the scanner'}</p>
+            <p className="mt-3 font-medium text-slate-900">{phase === 'scanning'
+                ? matchOnCard
+                  ? 'Reading the card and matching the finger…'
+                  : 'Scanning…'
+                : matchOnCard
+                  ? 'Check the Ghana Card is in the reader, then ask the customer to place their finger on the scanner'
+                  : 'Ask the customer to place their finger on the scanner'}</p>
             <p className="mt-1 text-xs text-slate-500">{deviceInfo}</p>
             <Button className="mt-4" loading={phase === 'scanning' || busy} onClick={scan}>
               Capture fingerprint
@@ -567,6 +610,7 @@ function AttemptHistory({ attempts }: { attempts: BiometricAttempt[] }) {
                   </td>
                   <td className="hidden px-4 py-3 text-xs text-slate-500 md:table-cell">
                     {a.failure_reason ? label(a.failure_reason) : a.match_score !== null ? `Score ${Math.round(a.match_score * 100)}%` : '—'}
+                    {a.verification_method && ` · ${label(a.verification_method)}`}
                     {a.purged_at && ' · references purged'}
                   </td>
                   <td className="hidden px-4 py-3 text-slate-600 md:table-cell">{a.operator?.name}</td>

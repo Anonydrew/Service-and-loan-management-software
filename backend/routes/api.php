@@ -34,6 +34,13 @@ use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 
+// The SPA reads its CSRF token here and sends it as X-CSRF-TOKEN. This avoids
+// relying on the XSRF-TOKEN cookie, whose fixed name collides with other
+// Laravel apps sharing the parent domain (e.g. the clinic ERP).
+Route::get('csrf-token', fn (\Illuminate\Http\Request $request) => response()->json([
+    'token' => $request->hasSession() ? $request->session()->token() : null,
+]))->middleware('throttle:60,1');
+
 Route::post('auth/login', [AuthController::class, 'login'])->middleware('throttle:login');
 
 // Asynchronous result callbacks from a biometric provider. Authenticated by

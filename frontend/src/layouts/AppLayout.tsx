@@ -8,6 +8,7 @@ import { initials, relative } from '../lib/format';
 import { useDebounced } from '../lib/hooks';
 import { cx, Spinner } from '../components/ui';
 import { NAVIGATION } from './navigation';
+import logo from '../assets/logo.svg';
 
 const COLLAPSE_KEY = 'slm.sidebar.collapsed';
 
@@ -38,12 +39,13 @@ export function AppLayout() {
 
   const sidebar = (isMobile: boolean) => (
     <nav className="flex h-full flex-col" aria-label="Main">
-      <div className={cx('flex h-16 shrink-0 items-center gap-3 px-4', collapsed && !isMobile && 'justify-center px-0')}>
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand-700 text-sm font-bold text-white">{initials(user?.company.name ?? 'S L')}</div>
+      <div className={cx('flex h-16 shrink-0 items-center gap-3 px-6', collapsed && !isMobile && 'justify-center px-0')}>
         {(!collapsed || isMobile) && (
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-slate-900">{user?.company.name}</p>
-            <p className="truncate text-xs text-slate-500">Service & Loan Manager</p>
+            <img src={logo} alt="DXCOVR" className="h-4 w-auto" />
+            <p className="mt-1 truncate text-xs text-slate-500" title={user?.company.name}>
+              {user?.company.name}
+            </p>
           </div>
         )}
         {isMobile && (

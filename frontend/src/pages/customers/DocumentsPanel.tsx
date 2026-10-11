@@ -1,13 +1,13 @@
 import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { CircleCheck, CircleX, Download, FileText, Trash2, Upload } from 'lucide-react';
+import { CircleCheck, CircleX, Download, FileText, ShieldAlert, Trash2, Upload } from 'lucide-react';
 import { api, download, errorMessage } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { date, label } from '../../lib/format';
 import { useAction, useLookups } from '../../lib/hooks';
 import type { Customer, CustomerDocument } from '../../lib/types';
 import { ConfirmDialog } from '../../components/Modal';
-import { Button, Card, CardHeader, EmptyState, ErrorState, LoadingBlock, SelectField, StatusBadge, TextField, cx } from '../../components/ui';
+import { Alert, Button, Card, CardHeader, EmptyState, ErrorState, LoadingBlock, SelectField, StatusBadge, TextField, cx } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { customerKeys } from './shared';
 
@@ -27,7 +27,12 @@ export function DocumentsPanel({ customer, readOnly }: { customer: Customer; rea
     : [...(lookups?.enums.identity_document_types ?? []), 'ssnit', 'proof_of_address', 'payslip', 'bank_statement', 'signed_consent_form', 'other'];
 
   const [file, setFile] = useState<File | null>(null);
-  const [type, setType] = useState(isBusiness ? 'business_registration' : 'ghana_card');
+  const [type, setType] = useState(isBusiness ? 'business_registration' : 'passport');
+  const ghanaCardHolders = isBusiness
+    ? (customer.representatives ?? []).filter((r) => r.id_type === 'ghana_card').map((r) => r.full_name)
+    : customer.id_type === 'ghana_card'
+      ? [customer.display_name]
+      : [];
   const [repId, setRepId] = useState('');
   const [number, setNumber] = useState('');
   const [issue, setIssue] = useState('');
@@ -90,6 +95,12 @@ export function DocumentsPanel({ customer, readOnly }: { customer: Customer; rea
 
   return (
     <div className="space-y-6">
+      {ghanaCardHolders.length > 0 && (
+        <Alert tone="amber" icon={<ShieldAlert className="size-4" />} title="Do not upload Ghana Card images">
+          Under L.I. 2523 the company may not photocopy, scan or keep an image of a Ghana Card, and may not rely on looking at it. {ghanaCardHolders.join(', ')}{' '}
+          {ghanaCardHolders.length === 1 ? 'is' : 'are'} verified biometrically on the Identity check step instead (match-on-card or NIA register).
+        </Alert>
+      )}
       {canUpload && (
         <Card>
           <CardHeader title="Upload a document" description="JPG, PNG or PDF up to 10 MB. Files are stored privately and every download is logged." />

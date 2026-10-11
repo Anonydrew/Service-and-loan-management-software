@@ -165,6 +165,7 @@ final class BiometricService
                 'liveness_passed' => $result->livenessPassed,
                 'provider_reference' => $result->providerReference,
                 'metadata' => $result->metadata ?: null,
+                'verification_method' => $result->method,
                 'client_nonce' => null,
                 'completed_at' => now(),
             ])->save();

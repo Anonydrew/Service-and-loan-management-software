@@ -44,7 +44,7 @@ Frontend (`frontend/.env`, optional): `VITE_API_BASE_URL` if the API is on a dif
 ## Tests
 
 ```bash
-cd backend && php artisan test           # 68 tests, SQLite in memory
+cd backend && php artisan test           # 77 tests, SQLite in memory
 cd frontend && npm run build && npx eslint src
 ```
 

@@ -10,6 +10,7 @@ use App\Models\CustomerDocument;
 use App\Services\Customers\DocumentService;
 use App\Services\Customers\OnboardingService;
 use App\Support\BusinessRuleException;
+use App\Support\GhanaCard;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -34,6 +35,13 @@ class CustomerDocumentController extends Controller
 
     public function store(Request $request, Customer $customer): JsonResponse
     {
+        if (in_array($request->input('document_type'), CustomerDocument::PROHIBITED_TYPES, true)) {
+            throw new BusinessRuleException(
+                'Ghana Card images may not be stored ('.GhanaCard::LAW.'). Verify the card holder biometrically instead.',
+                'ghana_card_image_prohibited',
+            );
+        }
+
         $data = $request->validate([
             'file' => ['required', 'file', 'max:10240', 'mimes:jpg,jpeg,png,pdf', 'mimetypes:image/jpeg,image/png,application/pdf'],
             'document_type' => ['required', Rule::in(CustomerDocument::TYPES)],

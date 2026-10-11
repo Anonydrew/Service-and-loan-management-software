@@ -50,7 +50,12 @@ final class ProviderRegistry
         $out = [];
         foreach (['face', 'fingerprint'] as $modality) {
             $p = $this->for($modality);
-            $out[$modality] = ['provider' => $p->name(), 'configured' => $p->isConfigured(), 'simulated' => $p->isSimulated()];
+            $out[$modality] = [
+                'provider' => $p->name(),
+                'configured' => $p->isConfigured(),
+                'simulated' => $p->isSimulated(),
+                'method' => $p instanceof FingerprintBridgeProvider ? $p->mode() : null,
+            ];
         }
 
         return $out;

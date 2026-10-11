@@ -19,7 +19,9 @@ class CreateCompany extends Command
     {
         $adminName = $this->option('admin-name') ?: $this->ask('Administrator name');
         $adminEmail = $this->option('admin-email') ?: $this->ask('Administrator email');
-        $password = $this->secret('Administrator password (min 10 chars, mixed case, a number)');
+        // On shared hosting, hidden prompts can fail (no stty), so the password may
+        // come from the environment instead:  read -s ADMIN_PASSWORD; export ADMIN_PASSWORD
+        $password = getenv('ADMIN_PASSWORD') ?: $this->secret('Administrator password (min 10 chars, mixed case, a number)');
 
         $validator = Validator::make(
             ['email' => $adminEmail, 'password' => $password],

@@ -27,7 +27,7 @@ class Company extends Model
             'allow_manual_review' => true,
             'max_biometric_attempts_per_day' => 3,
             'biometric_retention_days' => 365,
-            'consent_policy_version' => '2026-10',
+            'consent_policy_version' => '2026-10-LI2523',
         ],
         'loans' => [
             'maker_checker' => true,

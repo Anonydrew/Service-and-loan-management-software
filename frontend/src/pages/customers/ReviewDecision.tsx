@@ -7,7 +7,7 @@ import { Alert, Button, Card, CardHeader, Field, Textarea } from '../../componen
 import { customerKeys } from './shared';
 
 /** A compliance reviewer's decision on a customer referred for manual review. */
-export function ReviewDecision({ customer, onDone }: { customer: Customer; onDone?: () => void }) {
+export function ReviewDecision({ customer, onDone, approveBlocked }: { customer: Customer; onDone?: () => void; approveBlocked?: boolean }) {
   const { user } = useAuth();
   const [notes, setNotes] = useState('');
   const decide = useAction({
@@ -31,7 +31,12 @@ export function ReviewDecision({ customer, onDone }: { customer: Customer; onDon
         <Button variant="secondary" disabled={notes.trim().length < 5} loading={decide.isPending && decide.variables === 'reject'} onClick={() => decide.mutate('reject')}>
           Reject
         </Button>
-        <Button disabled={notes.trim().length < 5} loading={decide.isPending && decide.variables === 'approve'} onClick={() => decide.mutate('approve')}>
+        <Button
+          disabled={notes.trim().length < 5 || approveBlocked}
+          title={approveBlocked ? 'A Ghana Card holder must pass the biometric check before approval (L.I. 2523)' : undefined}
+          loading={decide.isPending && decide.variables === 'approve'}
+          onClick={() => decide.mutate('approve')}
+        >
           Approve identity
         </Button>
       </div>

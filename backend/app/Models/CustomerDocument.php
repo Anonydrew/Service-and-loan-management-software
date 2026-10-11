@@ -15,14 +15,21 @@ class CustomerDocument extends Model
 {
     use Auditable, BelongsToCompany, SoftDeletes;
 
-    /** Identity documents that can satisfy the "proof of identity" requirement. */
-    public const IDENTITY_TYPES = ['ghana_card', 'passport', 'voters_id', 'drivers_licence'];
+    /**
+     * Identity documents that can satisfy the "proof of identity" requirement.
+     * The Ghana Card is deliberately absent: under L.I. 2523 its image may not be
+     * kept, and a Ghana Card holder is verified biometrically instead.
+     */
+    public const IDENTITY_TYPES = ['passport', 'voters_id', 'drivers_licence'];
+
+    /** Document types whose image the law forbids the company to keep. */
+    public const PROHIBITED_TYPES = ['ghana_card'];
 
     /** Documents that can satisfy the "business registration" requirement. */
     public const BUSINESS_TYPES = ['business_registration', 'certificate_of_incorporation', 'certificate_to_commence', 'tin_certificate'];
 
     public const TYPES = [
-        'ghana_card', 'passport', 'voters_id', 'drivers_licence', 'ssnit',
+        'passport', 'voters_id', 'drivers_licence', 'ssnit',
         'business_registration', 'certificate_of_incorporation', 'certificate_to_commence', 'tin_certificate',
         'board_resolution', 'proof_of_address', 'bank_statement', 'payslip', 'signed_consent_form',
         'loan_agreement', 'service_agreement', 'other',
