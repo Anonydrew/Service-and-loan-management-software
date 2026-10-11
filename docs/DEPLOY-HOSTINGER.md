@@ -281,7 +281,7 @@ See [BIOMETRICS.md](BIOMETRICS.md) for what to obtain from NIA and DERMALOG.
 | **500** error | Read the end of today's log: `tail -n 50 ~/loans/backend/storage/logs/laravel-$(date +%F).log` |
 | Old version still showing after an update | Hard-refresh the browser (Ctrl+F5). The page itself is never cached, so this only happens if step 9 was skipped. |
 | `https://loans.yourdomain.com` shows a **file list** or **403** | Step 8's link points to the wrong place. `ls -la` the subdomain folder and check it points to `.../loans/backend/public`. |
-| `Permission denied` writing logs, cache or PDFs | `chmod -R 775 ~/loans/backend/storage ~/loans/backend/bootstrap/cache` |
+| `Permission denied` writing logs, cache or PDFs | `chmod -R u+rwX,g+rwX ~/loans/backend/storage ~/loans/backend/bootstrap/cache` |
 | Uploading a document fails for larger files | Raise `upload_max_filesize` and `post_max_size` (step 3). |
 | `composer`: "requires php ^8.3" | The command line uses older PHP; see step 5. |
 | Penalties never appear on overdue loans | Check the cron jobs (step 10) and their PHP path. Run the command by hand over SSH to see any error. |

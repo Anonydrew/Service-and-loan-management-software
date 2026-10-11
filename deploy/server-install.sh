@@ -51,7 +51,9 @@ echo "==> Creating the database tables"
 "$PHP" artisan migrate --force
 
 mkdir -p storage/app/private storage/fonts storage/framework/{cache,sessions,views} storage/logs
-chmod -R 775 storage bootstrap/cache
+# Writable by the web server; capital X keeps files non-executable (git tracks the mode).
+chmod -R u+rwX,g+rwX storage bootstrap/cache
+git -C "$APP_DIR" config core.fileMode false
 
 echo "==> Rebuilding caches"
 "$PHP" artisan config:cache
