@@ -1,0 +1,21 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+
+# Local databases and uploaded customer documents
+*.sqlite
+*.sqlite-journal
+backend/storage/app/private/*
+!backend/storage/app/private/.gitignore
+
+# Dependencies and build output
+node_modules/
+vendor/
+frontend/dist/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
