@@ -85,9 +85,8 @@ export default function LoginPage() {
 
       <div className="flex items-center justify-center p-6 sm:p-12">
         <div className="w-full max-w-sm">
-          <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <img src="/favicon.svg" alt="" className="size-11 rounded-xl" />
-            <img src={logo} alt="DXCOVR" className="h-5 w-auto" />
+          <div className="mb-8 lg:hidden">
+            <img src={logo} alt="DXCOVR" className="h-6 w-auto" />
           </div>
           <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
             Sign in
